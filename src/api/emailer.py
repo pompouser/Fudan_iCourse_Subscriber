@@ -18,6 +18,10 @@ import markdown
 from pygments.formatters import HtmlFormatter
 
 from src.runtime import config
+from src.api.email_markdown import (
+    build_attachment_filename,
+    build_course_markdown,
+)
 
 _MD_EXTENSIONS= ["tables", "fenced_code", "nl2br", "sane_lists", "codehilite"]
 
@@ -395,6 +399,20 @@ class Emailer:
         msg_alt.attach(MIMEText(plain, "plain", "utf-8"))
         msg_alt.attach(MIMEText(html, "html", "utf-8"))
         msg.attach(msg_alt)
+        for course_title, lectures in courses.items():
+            markdown_text = build_course_markdown(course_title, lectures)
+            markdown_part = MIMEText(markdown_text, "markdown", "utf-8")
+            markdown_part.add_header(
+                "Content-Disposition",
+                "attachment",
+                filename=(
+                    "utf-8",
+                    "",
+                    build_attachment_filename(course_title, lectures),
+                ),
+            )
+            msg.attach(markdown_part)
+
 
         # Attach CID images
         for cid, png_data in cid_images.items():
