@@ -12,6 +12,8 @@ AudioDownloader.  This file does only orchestration:
 
 Anything more interesting belongs in one of ``src/*`` modules.
 """
+from collections import OrderedDict
+from src.runtime.session_rules import lecture_is_selected
 
 import time
 import traceback
@@ -112,12 +114,26 @@ def _enumerate_lectures(client: ICourseClient, db: Database,
                     reporter.course_dedup_skip(title, lec["sub_id"])
             lectures = deduped
 
-            known_processed = db.get_processed_sub_ids(course_id)
-            new_lectures = [
-                lec for lec in lectures
-                if lec.get("has_playback")
-                and str(lec["sub_id"]) not in known_processed
-            ]
+            selected_lectures = []
+  filtered_count = 0
+  for lecture in lectures:
+      if not lecture.get("has_playback"):
+          continue
+      if lecture_is_selected(
+          course_id, lecture, config.COURSE_SESSION_RULES
+      ):
+          selected_lectures.append(lecture)
+      else:
+          filtered_count += 1
+  if filtered_count:
+      reporter.course_filter_skip(filtered_count)
+
+  known_processed = db.get_processed_sub_ids(course_id)
+  new_lectures = [
+      lec for lec in selected_lectures
+      if str(lec["sub_id"]) not in known_processed
+  ]
+
             unprocessed = db.get_unprocessed_lectures(course_id)
             new_ids = {str(lec["sub_id"]) for lec in new_lectures}
             retry_only = [
