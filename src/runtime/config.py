@@ -1,4 +1,5 @@
 import os
+from src.runtime.session_rules import parse_course_session_rules
 
 STUDENT_ID = os.environ.get("StuId", "")
 PASSWORD = os.environ.get("UISPsw", "")
@@ -181,3 +182,6 @@ COURSE_IDS = [
 # 保留此变量仅用于兼容老部署环境，新部署无需设置。
 # 例：CRAWL_TERM=25
 CRAWL_TERM = os.environ.get("CRAWL_TERM", "").strip()
+COURSE_SESSION_RULES = parse_course_session_rules(
+    os.environ.get("COURSE_SESSION_RULES", "")
+)
