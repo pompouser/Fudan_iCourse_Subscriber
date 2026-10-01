@@ -5,7 +5,6 @@ data/*
 !data/icourse.db.enc
 *.mp4
 *.wav
-tests/
 temp/
 # ASR models (downloaded at runtime)
 sherpa-onnx-sense-voice-*/
@@ -42,6 +41,7 @@ _backup_reencrypted.gz.enc
 docs/*
 !docs/*.png
 !docs/frontend-readme.md
+!docs/upstream-sync-2026-10-01.md
 docs/specs/
 *.mp3
 bugs.md

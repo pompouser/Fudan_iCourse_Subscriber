@@ -14,7 +14,7 @@ on:
           - HTML
           - PDF
           - Markdown
-        default: 'HTML'
+        default: 'PDF'
       sub_ids:
         description: "Optional comma-separated lecture sub_ids to filter (default: all summarized lectures)"
         required: false
@@ -52,7 +52,7 @@ jobs:
         if: inputs.export_type == 'PDF'
         run: |
           sudo apt-get update
-          sudo apt-get install -y fonts-noto-cjk libpango-1.0-0 libcairo2
+          sudo apt-get install -y fonts-noto-cjk libpango-1.0-0 libpangoft2-1.0-0 libcairo2
           pip install weasyprint pygments
           sudo mkdir -p /usr/local/share/fonts/custom
           sudo cp assets/MSYH.TTC /usr/local/share/fonts/custom/

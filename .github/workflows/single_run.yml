@@ -40,10 +40,10 @@ jobs:
         if: steps.cache-pip.outputs.cache-hit != 'true'
         run: pip install -r requirements.txt
 
-      - name: Install ffmpeg
+      - name: Install ffmpeg and PDF dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg fonts-noto-cjk libpango-1.0-0 libpangoft2-1.0-0 libcairo2
 
 
       - name: Cache ASR models

@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import subprocess
 import threading
+import tempfile
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
@@ -205,18 +206,30 @@ class AudioDownloader:
         try:
             self._sem.acquire()
             try:
+                with self._lock:
+                    current = self._active.get(sub_id) is pending
+                if not current:
+                    self._sem.release()
+                    return
                 url = client.get_video_url(course_id, sub_id)
                 if not url:
                     self._pop_if_mine(sub_id, pending)
                     self._sem.release()
                     return
                 vpn_url, headers = client.get_stream_params(url)
-                path = os.path.join(self._dir, f"{sub_id}.raw")
-                if os.path.exists(path):
-                    os.remove(path)
+                with self._lock:
+                    current = self._active.get(sub_id) is pending
+                if not current:
+                    self._sem.release()
+                    return
+                # Separate generations of the same lecture must never share a
+                # path: cancellation can race with URL retrieval or Popen.
+                fd, path = tempfile.mkstemp(suffix=".raw", dir=self._dir)
+                os.close(fd)
 
                 cmd = [
-                    "ffmpeg", "-y",
+                    "ffmpeg", "-y", "-nostdin",
+                    "-rw_timeout", "15000000",
                     "-headers", headers,
                     "-reconnect", "1",
                     "-reconnect_streamed", "1",
@@ -292,6 +305,11 @@ class AudioDownloader:
                     name=f"audio-monitor-{sub_id}", daemon=True,
                 ).start()
             except Exception:
+                if "path" in locals():
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
                 self._pop_if_mine(sub_id, pending)
                 self._sem.release()
                 raise
@@ -310,7 +328,7 @@ class AudioDownloader:
         Raises TimeoutError if the spawn never happens within ``timeout``.
         """
         sub_id = str(sub_id)
-        deadline = time.time() + timeout
+        deadline = time.monotonic() + timeout
         while True:
             with self._lock:
                 entry = self._active.get(sub_id)
@@ -318,7 +336,7 @@ class AudioDownloader:
                     return None
                 if isinstance(entry, AudioHandle):
                     return entry
-            if time.time() > deadline:
+            if time.monotonic() > deadline:
                 raise TimeoutError(
                     f"audio download for {sub_id} did not start within "
                     f"{timeout}s — likely WebVPN session expired or "

@@ -608,8 +608,22 @@ class Transcriber:
 
         f = open(audio_path, "rb")
         try:
+            idle_since = None
+
             def read_fn(n: int) -> bytes:
-                return f.read(n)
+                nonlocal idle_since
+                data = f.read(n)
+                if data:
+                    idle_since = None
+                elif ffmpeg_proc.poll() is None:
+                    # Count only time waiting for input, never ASR compute time.
+                    now = time.monotonic()
+                    if idle_since is None:
+                        idle_since = now
+                    elif now - idle_since > 120:
+                        raise TimeoutError(
+                            "Audio download stalled for 120s; retry on next run")
+                return data
 
             def is_eof_fn() -> bool:
                 # Truly EOF iff ffmpeg has exited.  ``_consume_pcm_stream``
@@ -650,6 +664,7 @@ class Transcriber:
         if http_headers:
             cmd += ["-headers", http_headers]
         cmd += [
+            "-rw_timeout", "15000000",
             "-reconnect", "1",
             "-reconnect_streamed", "1",
             "-reconnect_delay_max", "5",

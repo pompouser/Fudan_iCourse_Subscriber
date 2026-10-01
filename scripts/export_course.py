@@ -36,6 +36,7 @@ from html import escape
 # Allow importing from the project root when run as `python scripts/export_course.py`
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from src.api.pdf_export import render_course_pdf
 from src.runtime import config
 from src.data.database import Database  # noqa: E402
 from src.api.emailer import _EMAIL_CSS, _PYGMENTS_CSS, _md_to_html  # noqa: E402
@@ -101,7 +102,7 @@ def _build_plain(course_title: str, teacher: str, lectures: list[dict]) -> str:
 
 def _smtp_connect():
     """Return an authenticated SMTP_SSL connection."""
-    server = smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT)
+    server = smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=60)
     server.login(config.SMTP_EMAIL, config.SMTP_PASSWORD)
     return server
 
@@ -293,9 +294,8 @@ def main():
             course_title, teacher, lectures = result
             titles.append(course_title)
 
-            html = _build_html(course_title, teacher, lectures, pdf=True)
             print(f"Generating PDF for {course_title}...")
-            pdf_bytes = weasyprint.HTML(string=html).write_pdf()
+            pdf_bytes = render_course_pdf(course_title, lectures, teacher)
             filename = f"{_safe_filename(course_title)}_summaries.pdf"
             attachments.append((pdf_bytes, filename))
             print(f"  PDF ready ({len(pdf_bytes)} bytes): {filename}")

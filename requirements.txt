@@ -9,3 +9,5 @@ psutil
 pygments
 rapidocr-onnxruntime
 imagehash
+
+weasyprint>=62,<69

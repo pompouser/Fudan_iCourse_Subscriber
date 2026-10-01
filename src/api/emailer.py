@@ -10,6 +10,7 @@ from collections import OrderedDict
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
+from email.mime.application import MIMEApplication
 from html import escape
 from email.utils import formataddr
 from urllib.parse import quote
@@ -283,6 +284,45 @@ class Emailer:
         self.receiver = config.RECEIVER_EMAIL
 
     def send(self, items: list[dict]) -> bool:
+        """Send summaries as PDF attachments; failures remain eligible for retry."""
+        if not items:
+            return True
+        if not (self.sender and self.password and self.receiver):
+            raise ValueError("SMTP_EMAIL, SMTP_PASSWORD and RECEIVER_EMAIL are required")
+        from src.api.pdf_export import render_course_pdf, safe_filename
+
+        courses = OrderedDict()
+        for item in items:
+            courses.setdefault(item["course_title"], []).append(item)
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = "[FiCS PDF] " + ", ".join(
+            f"{title} ({len(lectures)})" for title, lectures in courses.items())
+        msg["From"] = formataddr(("iCourse Subscriber", self.sender))
+        msg["To"] = self.receiver
+        msg.attach(MIMEText("课程笔记已整理为 PDF，请查看附件。\n\n" +
+                            "\n".join(f"{t}：{len(ls)} 节" for t, ls in courses.items()),
+                            "plain", "utf-8"))
+        # Build every attachment before opening SMTP. A rendering failure must
+        # not mark any lecture as emailed or silently fall back to HTML.
+        for index, (title, lectures) in enumerate(courses.items(), 1):
+            part = MIMEApplication(render_course_pdf(title, lectures), _subtype="pdf")
+            part.add_header("Content-Disposition", "attachment",
+                            filename=f"{index:02d}_{safe_filename(title)}.pdf")
+            msg.attach(part)
+        for attempt in range(3):
+            try:
+                with smtplib.SMTP_SSL(self.host, self.port, timeout=60) as server:
+                    server.login(self.sender, self.password)
+                    server.sendmail(self.sender, self.receiver, msg.as_string())
+                print(f"[Emailer] Sent {len(courses)} PDF attachment(s)")
+                return True
+            except Exception as exc:
+                print(f"[Emailer] Attempt {attempt + 1}/3 failed: {exc}")
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+        return False
+
+    def send_html(self, items: list[dict]) -> bool:
         """Send a single email containing all lecture summaries.
 
         LaTeX formulas are rendered as PNG images and embedded directly into
@@ -410,7 +450,7 @@ class Emailer:
         # Retry with exponential backoff
         for attempt in range(3):
             try:
-                with smtplib.SMTP_SSL(self.host, self.port) as server:
+                with smtplib.SMTP_SSL(self.host, self.port, timeout=60) as server:
                     server.login(self.sender, self.password)
                     server.sendmail(self.sender, self.receiver, msg.as_string())
                 print(f"[Emailer] Sent: {subject}")

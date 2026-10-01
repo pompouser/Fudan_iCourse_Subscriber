@@ -172,8 +172,8 @@ def _drive_lectures(client: ICourseClient, db: Database,
             next_course, _, next_lec = all_lectures[i + 1]
             next_info = (next_course, str(next_lec["sub_id"]))
 
-        _check_session(client)
         try:
+            _check_session(client)
             summary = runner.run(
                 course_id, course_title, lecture, next_info=next_info,
             )
