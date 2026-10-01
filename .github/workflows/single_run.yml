@@ -22,16 +22,16 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Cache Python packages
         id: cache-pip
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.pythonLocation }}/lib/python*/site-packages
           key: pip-${{ hashFiles('requirements.txt') }}
@@ -48,7 +48,7 @@ jobs:
 
       - name: Cache ASR models
         id: cache-models
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/
@@ -64,7 +64,7 @@ jobs:
           wget -q https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx
 
       - name: Cache RapidOCR models
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/rapidocr
           key: rapidocr-onnx-default-v1

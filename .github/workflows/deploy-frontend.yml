@@ -31,18 +31,18 @@ jobs:
       # On manual dispatch we honour the ``branch`` input; for the auto
       # push trigger this resolves to '' and actions/checkout falls back
       # to the triggering ref (i.e. main per the push filter above).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.branch || github.ref }}
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./frontend
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
