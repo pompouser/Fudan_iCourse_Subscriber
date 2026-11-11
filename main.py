@@ -25,19 +25,30 @@ from src.runtime.reporter import Reporter
 from src.runtime.scheduler import Scheduler
 from src.ai.summarizer import Summarizer
 from src.ai.transcriber import Transcriber
-from src.api.webvpn import WebVPNSession
+from src.api.webvpn import LoginRejected, WebVPNSession
+
+
+def _ambiguous_auth_failure(exc: Exception) -> bool:
+    """True when IDP answered but did not issue a loginToken.
+
+    Repeating the whole WebVPN login for that shape just hammers the
+    same response and can trip risk control. Network errors and a cold
+    portal are not in this bucket.
+    """
+    text = str(exc)
+    return text.startswith("No loginToken") or text.startswith("Authentication failed")
 
 
 def login_with_retry(max_attempts: int = 10) -> WebVPNSession:
     """Login to WebVPN + iCourse CAS, retrying on transient failures.
 
-    The iCourse CAS step (authenticate_icourse) has its own inner retry
-    loop for transient redirect-chain hiccups; this outer loop only runs
-    when those inner retries are exhausted, which generally means the
-    WebVPN session itself needs a fresh login.  5 attempts handles the
-    long tail of times when CAS rejects multiple fresh sessions in a
-    row before letting one through.
+    Network timeouts and a portal that is still on the login page are
+    retried up to ``max_attempts``. A rejected password, captcha, lockout,
+    or second factor stops immediately. Two identical "answered, but no
+    loginToken" results also stop: the Nov 2026 runs showed that ten full
+    re-logins do not change that response.
     """
+    ambiguous = 0
     for attempt in range(max_attempts):
         try:
             vpn = WebVPNSession()
@@ -46,7 +57,32 @@ def login_with_retry(max_attempts: int = 10) -> WebVPNSession:
             print("[Login] iCourse CAS...")
             vpn.authenticate_icourse()
             return vpn
+        except LoginRejected as e:
+            print(f"[Login] Stopped: {e}")
+            print(
+                "[Login] Not retrying. Another attempt would repeat a "
+                "refusal (bad credentials, captcha, lockout, or a second "
+                "factor) and can lock the UIS account."
+            )
+            raise
+        except ValueError as e:
+            print(f"[Login] Stopped: {e}")
+            print(
+                "[Login] Not retrying. Set the STUID and UISPSW repository "
+                "secrets (environment variables StuId and UISPsw) and run again."
+            )
+            raise
         except Exception as e:
+            if _ambiguous_auth_failure(e):
+                ambiguous += 1
+                if ambiguous >= 2:
+                    raise RuntimeError(
+                        "Login got an IDP answer with no loginToken on two "
+                        "separate attempts. Retrying the full login again is "
+                        "unlikely to help and can trip Fudan risk control. "
+                        "The detail below omits tokens and passwords. "
+                        f"Last response: {e}"
+                    ) from e
             if attempt < max_attempts - 1:
                 print(f"  Failed: {type(e).__name__}: {e}; retrying...")
                 time.sleep(5)
